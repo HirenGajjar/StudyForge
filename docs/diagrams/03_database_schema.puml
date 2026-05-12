@@ -1,0 +1,180 @@
+@startuml StudyForge Database Schema
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+skinparam shadowing false
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #D1D5DB
+skinparam classArrowColor #374151
+skinparam classHeaderBackgroundColor #F3F4F6
+skinparam classAttributeIconSize 0
+
+title <size:16><b>StudyForge — Database Schema  (Supabase / PostgreSQL 15)</b></size>\n<size:11>All tables have Row-Level Security enabled</size>
+
+class "auth.users" as AUTH {
+  + id : UUID  <<PK>>
+  ..
+  email : TEXT
+  created_at : TIMESTAMPTZ
+}
+
+class "users" as U {
+  + id : UUID  <<PK, FK→auth.users>>
+  ..
+  email : TEXT
+  display_name : TEXT
+  avatar_url : TEXT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+class "sessions" as S {
+  + id : UUID  <<PK>>
+  ..
+  user_id : UUID  <<FK→users, nullable>>
+  anon_token : TEXT  <<UNIQUE>>
+  university_name : TEXT  NOT NULL
+  course_name : TEXT  NOT NULL
+  course_code : TEXT  nullable
+  status : TEXT
+  error_message : TEXT
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  ..
+  status values:
+  pending | parsing | searching
+  generating | complete | error
+}
+
+class "uploads" as UP {
+  + id : UUID  <<PK>>
+  ..
+  session_id : UUID  <<FK→sessions>>
+  file_name : TEXT
+  file_type : TEXT
+  file_size_bytes : INTEGER
+  storage_path : TEXT
+  parse_status : TEXT
+  page_count : INTEGER
+  created_at : TIMESTAMPTZ
+  ..
+  file_type: pdf | pptx | docx
+  parse_status: pending | parsed | failed
+}
+
+class "document_chunks" as DC {
+  + id : UUID  <<PK>>
+  ..
+  upload_id : UUID  <<FK→uploads>>
+  chunk_index : INTEGER
+  chunk_type : TEXT
+  content : TEXT
+  char_count : INTEGER  <<GENERATED>>
+  metadata : JSONB
+  created_at : TIMESTAMPTZ
+  ..
+  chunk_type: page | slide
+  metadata: { title, has_image,
+  is_past_paper, word_count }
+  UNIQUE(upload_id, chunk_index)
+}
+
+class "web_search_results" as WSR {
+  + id : UUID  <<PK>>
+  ..
+  session_id : UUID  <<FK→sessions>>
+  query : TEXT
+  provider : TEXT
+  results : JSONB
+  created_at : TIMESTAMPTZ
+  ..
+  provider: tavily | brave
+  results: [{title, url, content, score}]
+}
+
+class "generated_notes" as GN {
+  + id : UUID  <<PK>>
+  ..
+  session_id : UUID  <<FK→sessions>>
+  model_used : TEXT
+  sections : JSONB
+  summary : TEXT
+  key_concepts : JSONB
+  prompt_tokens : INTEGER
+  completion_tokens : INTEGER
+  generation_time_ms : INTEGER
+  created_at : TIMESTAMPTZ
+  ..
+  sections: [{id, title, content,
+  subsections:[{id,title,content}]}]
+}
+
+class "expected_questions" as EQ {
+  + id : UUID  <<PK>>
+  ..
+  session_id : UUID  <<FK→sessions>>
+  question_text : TEXT
+  question_type : TEXT
+  topic_tag : TEXT
+  difficulty : TEXT
+  model_answer : TEXT
+  source_hint : TEXT
+  created_at : TIMESTAMPTZ
+  ..
+  question_type: short_answer | essay | calculation
+  difficulty: easy | medium | hard
+  source_hint: from_slides | from_past_paper | web_context
+}
+
+class "quizzes" as QZ {
+  + id : UUID  <<PK>>
+  ..
+  session_id : UUID  <<FK→sessions>>
+  title : TEXT
+  total_questions : INTEGER
+  created_at : TIMESTAMPTZ
+}
+
+class "quiz_questions" as QQ {
+  + id : UUID  <<PK>>
+  ..
+  quiz_id : UUID  <<FK→quizzes>>
+  question_index : INTEGER
+  question_type : TEXT
+  question_text : TEXT
+  options : JSONB
+  correct_answer : TEXT
+  explanation : TEXT
+  topic_tag : TEXT
+  created_at : TIMESTAMPTZ
+  ..
+  question_type: mcq | short_answer
+  options: ["A. ...", "B. ...", ...] (MCQ only)
+}
+
+class "quiz_attempts" as QA {
+  + id : UUID  <<PK>>
+  ..
+  quiz_id : UUID  <<FK→quizzes>>
+  user_id : UUID  <<FK→users, nullable>>
+  answers : JSONB
+  score : INTEGER
+  completed_at : TIMESTAMPTZ
+  created_at : TIMESTAMPTZ
+}
+
+AUTH "1" --o "0..1" U : extends
+U "1" --o "0..*" S : owns (optional)
+S "1" *-- "1..*" UP : has uploads
+S "1" *-- "0..*" WSR : has search cache
+S "1" *-- "0..1" GN : has notes
+S "1" *-- "0..*" EQ : has questions
+S "1" *-- "0..1" QZ : has quiz
+UP "1" *-- "1..*" DC : has chunks
+QZ "1" *-- "1..*" QQ : has questions
+QZ "1" --o "0..*" QA : has attempts
+U "1" --o "0..*" QA : makes attempts
+
+@enduml

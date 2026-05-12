@@ -1,0 +1,113 @@
+@startuml StudyForge Data Flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam roundcorner 8
+skinparam shadowing false
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceArrowColor #374151
+skinparam sequenceLifeLineBorderColor #9CA3AF
+skinparam sequenceLifeLineBackgroundColor #F9FAFB
+skinparam sequenceParticipantBackgroundColor #FFFFFF
+skinparam sequenceParticipantBorderColor #D1D5DB
+skinparam sequenceActorBackgroundColor #FFF7ED
+skinparam sequenceActorBorderColor #F97316
+skinparam noteBackgroundColor #FFFBEB
+skinparam noteBorderColor #F59E0B
+skinparam sequenceGroupBackgroundColor #F0F9FF
+skinparam sequenceGroupBorderColor #BAE6FD
+
+title <size:16><b>StudyForge — Request & Data Flow</b></size>
+
+actor Student as S
+participant "Browser\n(Next.js)" as B
+participant "/api/sessions" as AS
+participant "/api/upload\n/api/parse" as AU
+participant "/api/generate" as AG #FFF7ED
+participant "AI Provider\n(Claude / GPT-4o)" as AI
+participant "Web Search\n(Tavily / Brave)" as WS
+participant "Supabase\nPostgres + Storage" as DB
+
+== Step 1 : Create Session ==
+
+S -> B : Fill form:\nuniversity, course name/code, files
+B -> AS : POST  { university, course_name,\ncourse_code, anon_token }
+AS -> DB : INSERT sessions  (status: pending)
+AS --> B : { session_id }
+
+== Step 2 : Upload & Parse Files ==
+
+B -> AU : POST  files (multipart/form-data)
+AU -> DB : stream → Storage bucket\nINSERT uploads row
+AU -> AU : parse buffer by file type
+note right AU
+  PDF  → pdf-parse  (per page)
+  PPTX → officeparser  (per slide)
+  DOCX → mammoth  (per heading section)
+  Max 8k chars / chunk  |  clean + normalize text
+end note
+AU -> DB : batch INSERT document_chunks
+AU -> DB : UPDATE uploads.parse_status = 'parsed'
+AU --> B : { upload_ids[] }
+
+== Step 3 : Generate  (SSE Streaming) ==
+
+B -> AG : POST  { session_id }
+activate AG
+
+AG -> DB : SELECT document_chunks\nWHERE session_id = ?
+
+group Web Search  (parallel via Promise.all)
+  AG -> WS : "{course}  {university}  syllabus"
+  AG -> WS : "{course}  {university}  exam format"
+  AG -> WS : "{course_code}  lecture notes"
+  WS --> AG : results  { title, url, snippet }
+  AG -> DB : INSERT web_search_results\n(cache 7 days per course+university)
+end
+
+AG -> AG : Build prompt:\n  System prompt  (CACHED — Anthropic cache_control)\n  Chunks + web results + past papers\n  Token budget check  ≤ 140k tokens
+
+AG -> AI : stream generation request
+activate AI
+
+loop Streaming tokens
+  AI --> AG : delta text chunk
+  AG --> B : SSE event  { type:'content', delta }
+  B -> B : buffer + render\nstreaming markdown in UI
+end
+
+AI --> AG : generation complete
+deactivate AI
+
+AG -> AG : Validate full JSON  (Zod schema)
+AG -> DB : INSERT generated_notes
+AG -> DB : INSERT expected_questions[]
+AG -> DB : INSERT quizzes + quiz_questions[]
+AG -> DB : UPDATE sessions.status = 'complete'
+AG --> B : SSE event  { type:'complete', session_id }
+deactivate AG
+
+== Step 4 : View Results ==
+
+B -> B : Render 3 tabs:\n  Notes  (sidebar TOC + markdown)\n  Expected Questions  (by topic + difficulty)\n  Quiz  (summary + start button)
+
+== Step 5 : Take Quiz ==
+
+S -> B : Click "Start Quiz"
+B -> B : Load questions from Zustand store
+S -> B : Submit answers  (MCQ + short answer)
+B -> DB : POST /api/quiz/:id/attempt\n{ answers, score }
+
+== Optional : Sign In ==
+
+S -[#F97316]-> B : Click "Sign In"
+B -[#F97316]-> DB : Supabase Auth  (Google OAuth)
+DB -[#F97316]-> DB : UPDATE sessions\nSET user_id = auth_user_id\nWHERE anon_token = stored_token
+note right
+  Migrates anonymous session
+  to authenticated user account
+  — history is preserved
+end note
+
+@enduml

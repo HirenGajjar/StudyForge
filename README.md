@@ -1,36 +1,195 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StudyForge
 
-## Getting Started
+> Open-source AI study assistant — upload your lecture slides and get exam-ready notes, expected questions, and an interactive quiz tailored to your university and course.
 
-First, run the development server:
+No account required. Works offline with a local Ollama model. Self-hostable.
+
+---
+
+## Architecture
+
+| Diagram | |
+|---|---|
+| System Overview | ![System Overview](docs/diagrams/StudyForge%20System%20Overview.png) |
+| Data Flow | ![Data Flow](docs/diagrams/StudyForge%20Data%20Flow.png) |
+| Database Schema | ![Database Schema](docs/diagrams/StudyForge%20Database%20Schema.png) |
+| Component Architecture | ![Component Architecture](docs/diagrams/StudyForge%20Component%20Architecture.png) |
+
+> PlantUML source files are in [`docs/diagrams/`](docs/diagrams/).
+
+---
+
+## Features
+
+- **Course-aware generation** — enter your university and course code; the AI tailors everything to your institution's exam style
+- **Web search augmentation** — automatically searches for your course syllabus, exam format, and lecture notes before generating
+- **Multi-format upload** — PDF, PPTX, DOCX lecture slides and past exam papers (up to 20 files)
+- **Structured study notes** — sections with exam tips, memory tricks, key concepts, and a revision sheet
+- **Expected exam questions** — 15+ questions with model answers, difficulty, probability scores, mark weightage, and reasoning
+- **Interactive quiz** — 20+ questions: MCQ, true/false, short answer, fill-in-the-blank, assertion-reason
+- **PDF export** — download notes, questions, or quiz as a branded PDF with watermark
+- **Streaming UI** — results stream in real time as the AI generates
+- **Multi-provider AI** — Ollama (local/free) → Gemini → Claude → OpenAI, automatic fallback
+- **No login required** — anonymous sessions work out of the box
+
+---
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org) 18+
+- [pnpm](https://pnpm.io) — `npm install -g pnpm`
+- [Supabase](https://supabase.com) account (free tier works)
+- At least one AI provider (see [AI Providers](#ai-providers))
+- (Optional but recommended) [Ollama](https://ollama.com) for free local AI
+
+---
+
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# 1. Clone
+git clone https://github.com/yourusername/studyforge.git
+cd studyforge
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Configure environment
+cp .env.local.example .env.local
+# Edit .env.local and fill in your keys (see Environment Variables below)
+
+# 4. Set up Supabase
+# - Create a project at supabase.com
+# - Run the SQL migration files in order in the Supabase SQL editor:
+#     supabase/migrations/001_initial_schema.sql
+#     supabase/migrations/002_rls_policies.sql
+#     supabase/migrations/003_indexes.sql
+# - Create a private Storage bucket named "uploads"
+
+# 5. (Optional) Start Ollama for free local AI
+ollama pull qwen3:30b
+ollama serve
+
+# 6. Start the dev server
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## AI Providers
 
-## Learn More
+StudyForge tries providers in this order and falls back automatically. At least one must be configured.
 
-To learn more about Next.js, take a look at the following resources:
+| Priority | Provider | Cost | Setup |
+|---|---|---|---|
+| 1 | **Ollama (local)** | Free | Install [Ollama](https://ollama.com), run `ollama pull qwen3:30b` |
+| 2 | **Google Gemini** | Free tier available | Get key from [aistudio.google.com](https://aistudio.google.com) |
+| 3 | **Anthropic Claude** | Paid | Get key from [console.anthropic.com](https://console.anthropic.com) |
+| 4 | **OpenAI GPT-4o** | Paid | Get key from [platform.openai.com](https://platform.openai.com) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Ollama is recommended for self-hosting — it's free, runs offline, and has no rate limits.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Web Search
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+When `TAVILY_API_KEY` is configured, StudyForge runs **3 parallel searches** before every generation to make the output course-specific:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Query | Purpose |
+|---|---|
+| `{course} {university} syllabus` | Align notes to actual syllabus topics |
+| `{course} {university} exam format` | Match question style and mark distribution |
+| `{course code} {university} lecture notes` | Pull in supplementary academic context |
+
+Results are injected into the AI prompt alongside your uploaded slides. Without a key, generation falls back to uploaded materials only. Get a free Tavily key at [tavily.com](https://tavily.com).
+
+---
+
+## Environment Variables
+
+Copy `.env.local.example` to `.env.local` and fill in the values.
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase publishable anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase secret service role key (server-only, never expose to client) |
+| `NEXT_PUBLIC_APP_URL` | Yes | Base URL of the app e.g. `http://localhost:3000` |
+| `OLLAMA_MODEL` | No | Primary local model (default: `qwen3:30b`) |
+| `OLLAMA_FALLBACK_MODEL` | No | Fallback local model (default: `qwen2.5:14b`) |
+| `GEMINI_API_KEY` | No | Google Gemini API key |
+| `ANTHROPIC_API_KEY` | No | Anthropic Claude API key |
+| `OPENAI_API_KEY` | No | OpenAI GPT-4o key |
+| `TAVILY_API_KEY` | No | Tavily web search — strongly recommended |
+| `BRAVE_SEARCH_API_KEY` | No | Brave Search — fallback if Tavily quota exhausted |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) + TypeScript strict |
+| UI | Tailwind CSS v4 + shadcn/ui + Framer Motion |
+| AI | Ollama · Google Gemini · Anthropic Claude · OpenAI GPT-4o |
+| Database | Supabase (PostgreSQL 15 + Storage + Auth) |
+| File parsing | pdf-parse · officeparser · mammoth (server-side, no third-party APIs) |
+| Web search | Tavily · Brave Search |
+| State | Zustand + SSE streaming |
+| Validation | Zod + React Hook Form |
+| PDF export | jsPDF (client-side, branded + watermark) |
+
+---
+
+## Project Structure
+
+```
+app/
+  (marketing)/      Landing page
+  create/           Upload + course input form
+  session/[id]/     Generation viewer (notes, questions, quiz)
+  quiz/[id]/        Interactive quiz runner
+  api/
+    sessions/       Create / fetch sessions
+    upload/         File upload → parse → chunk → Supabase
+    generate/       Web search + AI generation + SSE stream
+    quiz/[id]/      Quiz fetch + attempt recording
+lib/
+  ai/               Claude, Gemini, Ollama, OpenAI providers + prompts + parser
+  parsers/          PDF, PPTX, DOCX parsers
+  stores/           Zustand stores
+  utils/            Token budgeting, text chunking, PDF export
+  supabase/         Client + server Supabase helpers
+components/
+  session/          GenerationViewer (streaming tabs + download buttons)
+  ui/               shadcn/ui components
+supabase/
+  migrations/       001_initial_schema · 002_rls_policies · 003_indexes
+types/              TypeScript interfaces for generation output, uploads
+```
+
+---
+
+## Contributing
+
+Contributions are welcome. Please open an issue before starting a large change so we can discuss the approach.
+
+```bash
+# Fork the repo, then:
+git checkout -b feat/your-feature
+# make your changes
+pnpm lint
+git commit -m "feat: your feature"
+git push origin feat/your-feature
+# Open a pull request
+```
+
+---
+
+## License
+
+AGPL-3.0 — see [LICENSE](./LICENSE)
+
+This means if you run a modified version of StudyForge as a network service, you must make your modified source code available to users. For commercial use without AGPL obligations, contact us for a commercial license.

@@ -1,0 +1,119 @@
+@startuml StudyForge System Overview
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam roundcorner 12
+skinparam shadowing false
+skinparam ArrowColor #374151
+skinparam ArrowThickness 1.5
+
+skinparam actor {
+  BackgroundColor #FFF7ED
+  BorderColor #F97316
+  FontColor #111827
+}
+
+skinparam package {
+  BackgroundColor #F9FAFB
+  BorderColor #E5E7EB
+  FontColor #111827
+  FontStyle bold
+}
+
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #D1D5DB
+  FontColor #111827
+}
+
+skinparam database {
+  BackgroundColor #EFF6FF
+  BorderColor #3B82F6
+  FontColor #1E3A8A
+}
+
+skinparam cloud {
+  BackgroundColor #F0FDF4
+  BorderColor #22C55E
+  FontColor #14532D
+}
+
+title <size:18><b>StudyForge — System Architecture Overview</b></size>\n<size:12>Open Source AI Study Assistant · MIT License</size>
+
+actor "Student\n(Browser)" as student
+
+package "Next.js Application  (Vercel / Self-hosted)" {
+
+  package "Frontend  (React + shadcn/ui + Tailwind)" {
+    component "Landing Page  /" as landing
+    component "Create Session  /create" as create
+    component "Results  /session/:id" as results
+    component "Quiz  /quiz/:id" as quiz
+    component "History  /history" as history
+  }
+
+  package "API Routes  (Next.js App Router)" {
+    component "POST /api/sessions" as api_sessions
+    component "POST /api/upload" as api_upload
+    component "POST /api/parse" as api_parse
+    component "POST /api/generate\n← core orchestrator" as api_generate #FFF7ED
+    component "GET  /api/quiz/:id" as api_quiz
+  }
+
+  package "Core Libraries" {
+    component "AI Provider\n(Claude + GPT-4o adapter)" as ai_provider
+    component "File Parsers\n(pdf-parse · officeparser · mammoth)" as parsers
+    component "Web Search\n(Tavily · Brave fallback)" as search
+    component "Prompt Builder\n+ Token Budget Manager" as prompts
+    component "SSE Streamer" as sse
+  }
+}
+
+database "Supabase" {
+  component "PostgreSQL 15\nsessions · uploads · chunks\nnotes · quizzes · questions" as pg
+  component "Storage Bucket\n(raw uploaded files)" as storage
+  component "Auth\n(Google OAuth)" as auth
+}
+
+cloud "External AI APIs" {
+  component "Anthropic\nClaude Sonnet 4.5\n(200k context + caching)" as claude
+  component "OpenAI\nGPT-4o\n(fallback)" as openai
+}
+
+cloud "Web Search APIs" {
+  component "Tavily API\n(primary)" as tavily
+  component "Brave Search API\n(fallback)" as brave
+}
+
+' User flow
+student --> landing
+landing --> create : CTA "Get Started"
+create --> api_sessions : POST  create session
+create --> api_upload  : POST  upload files
+api_upload --> storage : stream raw files
+api_upload --> api_parse : trigger parsing
+api_parse --> parsers  : extract text per page/slide
+parsers --> pg : INSERT document_chunks
+
+create --> api_generate : POST  start generation
+api_generate --> search : 3 parallel web queries
+search --> tavily
+tavily -[dashed]-> brave : quota exhausted fallback
+search --> pg : cache search results (7 days)
+api_generate --> prompts : build prompt\n(chunks + web results + context)
+prompts --> ai_provider
+ai_provider --> claude
+claude -[dashed]-> openai : 529 / 500 fallback
+ai_provider --> sse : stream response tokens
+sse --> results : Server-Sent Events
+results --> student : streaming notes\n+ questions + quiz
+
+student --> quiz : take quiz
+quiz --> api_quiz : submit answers
+api_quiz --> pg : save attempt + score
+
+student -[dashed]-> auth : optional Google sign-in
+auth -[dashed]-> history : view saved sessions
+
+@enduml

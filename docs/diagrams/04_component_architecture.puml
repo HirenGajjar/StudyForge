@@ -1,0 +1,152 @@
+@startuml StudyForge Component Architecture
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam roundcorner 10
+skinparam shadowing false
+skinparam packageBackgroundColor #F9FAFB
+skinparam packageBorderColor #E5E7EB
+skinparam packageFontStyle bold
+skinparam componentBackgroundColor #FFFFFF
+skinparam componentBorderColor #D1D5DB
+skinparam arrowColor #374151
+skinparam arrowThickness 1.5
+skinparam noteBackgroundColor #FFFBEB
+skinparam noteBorderColor #F59E0B
+
+title <size:16><b>StudyForge — Frontend Component Architecture</b></size>
+
+package "app/  (Next.js App Router Pages)" {
+
+  package "Landing  /" {
+    component "page.tsx" as LP
+    component "Hero.tsx" as hero
+    component "FeatureGrid.tsx" as fg
+    LP --> hero
+    LP --> fg
+  }
+
+  package "Create  /create" {
+    component "page.tsx" as CP
+    component "CourseForm.tsx\nRHF + Zod validation" as CF
+    component "FileDropzone.tsx\ndrag-drop, multi-file" as FD
+    component "UploadProgress.tsx\nper-file XHR progress" as UPR
+    CP --> CF
+    CP --> FD
+    CP --> UPR
+  }
+
+  package "Session Results  /session/:id" {
+    component "page.tsx\n(Server Component)\nloads session from DB" as SP
+    component "GenerationViewer.tsx\n(Client Component)\nSSE consumer + orchestrator" as GV #FFF7ED
+    component "NotesTab.tsx\nreact-markdown + typography" as NT
+    component "QuestionsTab.tsx\naccordion grouped by topic" as QT
+    component "QuizTab.tsx\nsummary + start button" as QZT
+    component "NotesSidebar.tsx\nlive TOC from stream" as NS
+    component "StatusBanner.tsx\nParsing → Searching → Generating" as SB
+    component "StreamingText.tsx\nFramer Motion fade-in" as ST
+    SP --> GV
+    GV --> NT
+    GV --> QT
+    GV --> QZT
+    GV --> NS
+    GV --> SB
+    NT --> ST
+  }
+
+  package "Quiz  /quiz/:id" {
+    component "page.tsx" as QP
+    component "QuizRunner.tsx" as QR
+    component "MCQQuestion.tsx" as MCQ
+    component "ShortAnswerQuestion.tsx" as SAQ
+    component "QuizResults.tsx" as QRS
+    QP --> QR
+    QR --> MCQ
+    QR --> SAQ
+    QR --> QRS
+  }
+
+  package "History  /history  (auth gated)" {
+    component "page.tsx\nServer Component\nredirects if no session" as HP
+  }
+}
+
+package "lib/  (Shared Business Logic)" {
+
+  package "ai/" {
+    component "provider.ts\nAIProvider interface + factory" as AIP
+    component "claude.ts\nAnthropic SDK\nprompt cache (cache_control)" as CL
+    component "openai.ts\nGPT-4o fallback adapter" as OAI
+    component "prompts.ts\nsystem + user prompt builders\ntoken budget management" as PR #FFF7ED
+    component "response-parser.ts\nstreaming JSON parser" as RP
+    AIP --> CL
+    AIP --> OAI
+    AIP --> PR
+    AIP --> RP
+  }
+
+  package "parsers/" {
+    component "index.ts\ndispatcher by MIME type" as PI
+    component "pdf-parser.ts\npdf-parse, per-page" as PDF
+    component "pptx-parser.ts\nofficeparser, per-slide" as PPTX
+    component "docx-parser.ts\nmammoth, per-heading" as DOCX
+    PI --> PDF
+    PI --> PPTX
+    PI --> DOCX
+  }
+
+  package "search/" {
+    component "index.ts\ndispatcher + 7d cache check" as SI
+    component "tavily.ts\nprimary provider" as TAV
+    component "brave.ts\nquota fallback" as BRV
+    SI --> TAV
+    SI --> BRV
+  }
+
+  package "stores/  (Zustand)" {
+    component "session-store.ts\nsession metadata" as SS
+    component "generation-store.ts\nstreaming progress\nparsed notes / questions / quiz" as GS
+    component "quiz-store.ts\nanswers + current question" as QS
+  }
+
+  package "hooks/" {
+    component "useSSE.ts\nEventSource wrapper" as USSE
+    component "useFileUpload.ts\nXHR upload + progress" as UFU
+    component "useAnonymousSession.ts\nlocalStorage anon_token" as UAS
+  }
+
+  package "supabase/" {
+    component "client.ts  (browser)" as SBC
+    component "server.ts  (SSR / API routes)" as SBS
+    component "types.ts  (generated DB types)" as SBT
+  }
+}
+
+' Cross-package connections
+GV ..> GS : reads / writes streaming state
+GV ..> SS : reads session info
+GV --> USSE : subscribes to SSE stream
+QR ..> QS : reads / writes quiz state
+CP --> UAS : create or retrieve anon_token
+FD --> UFU : track upload progress
+
+note right of GV
+  Most complex component:
+  Connects EventSource → /api/generate
+  Buffers streaming JSON fragments
+  Updates Zustand on each section complete
+  Builds TOC in real-time as headings arrive
+  Handles: status events, content delta, complete
+end note
+
+note right of PR
+  Critical logic:
+  ~4 chars = 1 token estimation
+  Hard cap: 140k input tokens
+  Chunk scoring: density × position weight
+  Drops low-score chunks when over budget
+  Anthropic cache_control on system prompt
+end note
+
+@enduml
