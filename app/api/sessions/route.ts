@@ -11,11 +11,11 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createServiceClient()
+    // Generate a fresh session ID each time — one anon_token can have many sessions
     const { data, error } = await supabase
       .from('sessions')
-      .upsert(
+      .insert(
         { university_name, course_name, course_code: course_code || null, anon_token },
-        { onConflict: 'anon_token', ignoreDuplicates: false }
       )
       .select('id')
       .single()

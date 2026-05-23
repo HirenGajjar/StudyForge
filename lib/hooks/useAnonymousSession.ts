@@ -1,19 +1,22 @@
 'use client'
-import { useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import { generateAnonToken } from '@/lib/utils/format'
 
 const KEY = 'studyforge_anon_token'
 
-export function useAnonymousSession() {
-  const [token] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    let t = localStorage.getItem(KEY)
-    if (!t) {
-      t = generateAnonToken()
-      localStorage.setItem(KEY, t)
-    }
-    return t
-  })
+function getToken(): string {
+  let t = localStorage.getItem(KEY)
+  if (!t) {
+    t = generateAnonToken()
+    localStorage.setItem(KEY, t)
+  }
+  return t
+}
 
-  return token
+export function useAnonymousSession(): string | null {
+  return useSyncExternalStore(
+    () => () => {},       // no external subscription needed
+    () => getToken(),     // client snapshot
+    () => null,           // server snapshot
+  )
 }

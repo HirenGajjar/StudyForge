@@ -20,25 +20,21 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createServiceClient()
-    const uploadIds: string[] = []
 
+    // Validate all files first before doing any async work
     for (const file of files) {
-      const fileType = detectFileType(file.name)
-      if (!fileType) {
-        return NextResponse.json(
-          { error: `Unsupported file type: ${file.name}` },
-          { status: 400 },
-        )
+      if (!detectFileType(file.name)) {
+        return NextResponse.json({ error: `Unsupported file type: ${file.name}` }, { status: 400 })
       }
-
       if (file.size > MAX_SIZE) {
-        return NextResponse.json(
-          { error: `File too large: ${file.name} (max 50MB)` },
-          { status: 400 },
-        )
+        return NextResponse.json({ error: `File too large: ${file.name} (max 50MB)` }, { status: 400 })
       }
+    }
 
-      // Insert upload row first to get the ID
+    // Process all files in parallel
+    const uploadIds = await Promise.all(files.map(async (file) => {
+      const fileType = detectFileType(file.name)!
+
       const { data: uploadRow, error: insertErr } = await supabase
         .from('uploads')
         .insert({
@@ -59,23 +55,16 @@ export async function POST(req: NextRequest) {
 
       const { error: storageErr } = await supabase.storage
         .from('uploads')
-        .upload(storagePath, arrayBuffer, {
-          contentType: file.type,
-          upsert: false,
-        })
+        .upload(storagePath, arrayBuffer, { contentType: file.type, upsert: false })
 
       if (storageErr) throw storageErr
 
-      await supabase
-        .from('uploads')
-        .update({ storage_path: storagePath })
-        .eq('id', uploadRow.id)
+      await supabase.from('uploads').update({ storage_path: storagePath }).eq('id', uploadRow.id)
 
-      uploadIds.push(uploadRow.id)
-
-      // Parse inline (for files under timeout budget)
       await parseUpload(supabase, uploadRow.id, storagePath, fileType, isPastPaper)
-    }
+
+      return uploadRow.id
+    }))
 
     return NextResponse.json({ upload_ids: uploadIds })
   } catch (err) {

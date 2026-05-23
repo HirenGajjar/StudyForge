@@ -45,10 +45,16 @@ export default function QuizPage() {
   if (loading) return <div className="flex items-center justify-center h-screen text-gray-400">Loading quiz…</div>
   if (!quiz || !quiz.quiz_questions) return <div className="flex items-center justify-center h-screen text-red-400">Quiz not found</div>
 
-  const questions = quiz.quiz_questions.sort((a, b) => a.question_index - b.question_index)
-  const current = questions[currentIndex]
+  const questions = quiz.quiz_questions
+    .filter((q) => q.question_type === 'mcq' && q.options && q.options.length > 0)
+    .sort((a, b) => a.question_index - b.question_index)
+
+  if (!questions.length) return <div className="flex items-center justify-center h-screen text-gray-400">No MCQ questions found for this quiz.</div>
+
+  const safeIndex = Math.min(currentIndex, questions.length - 1)
+  const current = questions[safeIndex]
   const total = questions.length
-  const isLast = currentIndex === total - 1
+  const isLast = safeIndex === total - 1
 
   const handleSubmit = () => {
     let s = 0
@@ -73,11 +79,14 @@ export default function QuizPage() {
           <div className="mb-6 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
             <div className="h-full bg-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-3 justify-center flex-wrap">
             <Button variant="outline" onClick={() => { reset(); setRevealed({}) }}>Retry</Button>
-            <a href="/create">
+            <Link href={`/session/${params.id}`}>
+              <Button variant="outline">Back to Notes</Button>
+            </Link>
+            <Link href="/create">
               <Button className="bg-orange-500 hover:bg-orange-600 text-white">New study pack</Button>
-            </a>
+            </Link>
           </div>
         </div>
       </main>
@@ -92,10 +101,15 @@ export default function QuizPage() {
           <Link href="/" className="font-semibold text-base tracking-tight">
             Study<span className="text-orange-500">Forge</span>
           </Link>
-          <span className="text-sm text-gray-400">{currentIndex + 1} / {total}</span>
+          <div className="flex items-center gap-3">
+            <Link href={`/session/${params.id}`}>
+              <Button variant="outline" size="sm">← Back to Notes</Button>
+            </Link>
+            <span className="text-sm text-gray-400">{safeIndex + 1} / {total}</span>
+          </div>
         </div>
 
-        <Progress value={((currentIndex + 1) / total) * 100} className="h-1.5 mb-6" />
+        <Progress value={((safeIndex + 1) / total) * 100} className="h-1.5 mb-6" />
 
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
           {/* Topic tag */}
@@ -118,15 +132,15 @@ export default function QuizPage() {
                   opt.trim().toUpperCase() === correctNorm ||
                   opt.trim().toUpperCase().startsWith(correctNorm + '.') ||
                   opt.trim().toUpperCase().startsWith(correctNorm + ')')
-                const showResult = revealed[currentIndex]
+                const showResult = revealed[safeIndex]
 
                 return (
                   <button
                     key={opt}
                     onClick={() => {
-                      if (!revealed[currentIndex]) {
+                      if (!revealed[safeIndex]) {
                         setAnswer(current.id, letter)
-                        setRevealed((r) => ({ ...r, [currentIndex]: true }))
+                        setRevealed((r) => ({ ...r, [safeIndex]: true }))
                       }
                     }}
                     className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all ${
@@ -149,7 +163,7 @@ export default function QuizPage() {
                 )
               })}
 
-              {revealed[currentIndex] && (
+              {revealed[safeIndex] && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 px-1">{current.explanation}</p>
               )}
             </div>
@@ -174,7 +188,7 @@ export default function QuizPage() {
           <Button
             variant="outline"
             size="sm"
-            disabled={currentIndex === 0}
+            disabled={safeIndex === 0}
             onClick={prevQuestion}
           >
             <ChevronLeft className="w-4 h-4 mr-1" /> Back

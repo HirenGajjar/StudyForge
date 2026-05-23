@@ -9,7 +9,7 @@ import type { SSEEvent } from '@/types/generation'
 
 export const dynamic = 'force-dynamic'
 
-const MAX_INPUT_TOKENS = 140000
+const MAX_INPUT_TOKENS = 24000
 
 function sseEvent(event: SSEEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
           .eq('id', session_id)
 
         // Load all chunks for this session
-        send({ type: 'status', message: 'Loading course materials...' })
+        send({ type: 'status', message: 'Loading course materials...', progress: 10 })
         const { data: uploads } = await supabase
           .from('uploads')
           .select('id')
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Web search (Phase 2 — graceful skip if no API key)
-        send({ type: 'status', message: 'Searching web for course information...' })
+        send({ type: 'status', message: 'Searching web for course information...', progress: 25 })
         const webResults: Array<{ query: string; results: Array<{ title: string; url: string; content: string }> }> = []
 
         if (process.env.TAVILY_API_KEY) {
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
               return { query, results: (data.results ?? []).map((r: { title: string; url: string; content: string }) => ({
                 title: r.title,
                 url: r.url,
-                content: r.content?.slice(0, 400) ?? '',
+                content: r.content?.slice(0, 200) ?? '',
               }))}
             })
 
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Token budget management
-        send({ type: 'status', message: 'Preparing AI generation...' })
+        send({ type: 'status', message: 'Preparing AI generation...', progress: 45 })
         const systemPrompt = buildSystemPrompt()
 
         const scored = chunks.map((c, i) => ({
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
         })
 
         // Stream AI generation
-        send({ type: 'status', message: 'Generating study notes, questions, and quiz...' })
+        send({ type: 'status', message: 'Generating study notes, questions, and quiz...', progress: 55 })
 
         const startTime = Date.now()
         let fullResponse = ''
@@ -156,9 +156,10 @@ export async function POST(req: NextRequest) {
         const generationTime = Date.now() - startTime
 
         // Parse and persist
+        send({ type: 'status', message: 'Saving results...', progress: 90 })
         const parsed = parseGenerationResponse(fullResponse)
 
-        await supabase
+        const { error: notesErr } = await supabase
           .from('generated_notes')
           .insert({
             session_id,
@@ -170,23 +171,34 @@ export async function POST(req: NextRequest) {
           })
           .select('id')
           .single()
+        if (notesErr) console.error('[generate] generated_notes insert failed:', notesErr)
+
+        // Normalise AI types to DB-allowed values
+        const normaliseDifficulty = (d: string): 'easy' | 'medium' | 'hard' =>
+          d === 'easy' ? 'easy' : d === 'hard' ? 'hard' : 'medium'
+
+        const normaliseEqType = (t: string): 'short_answer' | 'essay' | 'calculation' => {
+          if (t === 'numerical' || t === 'calculation') return 'calculation'
+          if (t === 'case_study' || t === 'application') return 'essay'
+          return 'short_answer'
+        }
 
         if (parsed.expected_questions.length > 0) {
-          await supabase.from('expected_questions').insert(
+          const { error: eqErr } = await supabase.from('expected_questions').insert(
             parsed.expected_questions.map((q) => ({
               session_id,
               question_text: q.question,
-              type: q.type,
+              question_type: normaliseEqType(q.type),
               topic_tag: q.topic,
-              difficulty: q.difficulty,
+              difficulty: normaliseDifficulty(q.difficulty),
               model_answer: q.model_answer,
               source_hint: 'from_slides',
             })),
           )
+          if (eqErr) console.error('[generate] expected_questions insert failed:', eqErr)
         }
 
         if (parsed.quiz.length > 0) {
-          // DB question_type only allows 'mcq' | 'short_answer'
           const normaliseType = (t: string): 'mcq' | 'short_answer' =>
             t === 'mcq' ? 'mcq' : 'short_answer'
 
@@ -201,18 +213,19 @@ export async function POST(req: NextRequest) {
             .single()
 
           if (quizRow) {
-            await supabase.from('quiz_questions').insert(
+            const { error: qErr } = await supabase.from('quiz_questions').insert(
               parsed.quiz.map((q, i) => ({
                 quiz_id: quizRow.id,
                 question_index: i,
                 question_type: normaliseType(q.type),
                 question_text: q.question,
-                options: q.options ?? null,
+                options: Array.isArray(q.options) ? q.options : null,
                 correct_answer: q.correct_answer,
                 explanation: q.explanation,
                 topic_tag: q.topic,
               })),
             )
+            if (qErr) console.error('[generate] quiz_questions insert failed:', qErr)
           }
         }
 

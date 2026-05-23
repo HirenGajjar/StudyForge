@@ -77,7 +77,7 @@ export interface GenerationOutput {
 }
 
 export type SSEEvent =
-  | { type: 'status'; message: string }
+  | { type: 'status'; message: string; progress: number }
   | { type: 'content'; delta: string }
   | { type: 'complete'; sessionId: string }
   | { type: 'error'; message: string }

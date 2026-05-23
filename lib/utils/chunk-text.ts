@@ -34,20 +34,12 @@ export function selectChunksWithinBudget(
   const pastPaper = chunks.filter((c) => c.isPastPaper)
   const regular = chunks.filter((c) => !c.isPastPaper)
 
-  const scored = regular.map((c) => {
-    const words = c.content.split(/\s+/).length
-    const density = words / Math.max(c.content.length, 1)
-    const total = c.totalChunks || 1
-    const pos = c.chunkIndex / total
-    const posWeight = pos < 0.1 || pos > 0.9 ? 2 : 1
-    return { chunk: c, score: density * posWeight }
-  })
-  scored.sort((a, b) => b.score - a.score)
-
   const selected: ScoredChunk[] = [...pastPaper]
   let used = estimateTokens(pastPaper.map((c) => c.content).join(' '))
 
-  for (const { chunk } of scored) {
+  // Include chunks in order — even sampling across the full document
+  // gives better coverage than density-sorting which skips middle content
+  for (const chunk of regular) {
     const t = estimateTokens(chunk.content)
     if (used + t > maxTokens) break
     selected.push(chunk)

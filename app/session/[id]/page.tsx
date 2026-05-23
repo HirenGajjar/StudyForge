@@ -15,16 +15,18 @@ export default async function SessionPage({
     .eq('id', id)
     .single()
 
+  // If stuck in 'generating' (previous run died), reset so client re-triggers generation
+  const status = session?.status ?? 'pending'
+  if (status === 'generating') {
+    await supabase
+      .from('sessions')
+      .update({ status: 'pending', updated_at: new Date().toISOString() })
+      .eq('id', id)
+  }
+
   return (
     <div className="h-screen overflow-hidden flex flex-col">
-      {session && (
-        <div className="hidden">
-          {/* Metadata available server-side */}
-          <span data-university={session.university_name} />
-          <span data-course={session.course_name} />
-        </div>
-      )}
-      <GenerationViewer sessionId={id} />
+      <GenerationViewer sessionId={id} initialStatus={status === 'generating' ? 'pending' : status} />
     </div>
   )
 }

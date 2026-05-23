@@ -147,17 +147,17 @@ NOTES OBJECT
 NOTES GENERATION RULES
 ========================
 
-1. Notes must prioritize conceptual understanding, align with probable exam expectations, explain difficult concepts intuitively, and include structured progression.
-2. Content must use markdown formatting with headings/subheadings, tables where useful, comparisons, and workflows.
-3. Technical subjects: include formulas, derivations, pseudocode, architecture diagrams (textual), algorithms, complexity analysis.
-4. Theory subjects: include frameworks, advantages/disadvantages, comparisons, case studies, analytical discussion.
-5. Every section must provide enough depth for revision, exam preparation, and conceptual clarity. Do NOT generate shallow notes.
+1. Notes must prioritize conceptual understanding and exam expectations. Each section must be thorough.
+2. Use markdown formatting with headings, tables where useful, and comparisons.
+3. Generate 5-8 sections. Each section must have detailed content, not just a summary sentence.
+4. Technical subjects: include key formulas, algorithms, complexity. Theory subjects: frameworks, comparisons, case studies.
+5. Do NOT pad with filler content — but DO be comprehensive. Cover each topic fully.
 
 ========================
 EXPECTED QUESTIONS
 ========================
 
-Generate MINIMUM 15 questions resembling actual university exams, probable future papers, faculty question styles, and application-based assessments.
+Generate 12 questions resembling actual university exams, probable future papers, faculty question styles, and application-based assessments.
 
 "expected_questions": [
   {
@@ -182,7 +182,7 @@ Model answers: exam-ready, include keywords, maximize scoring potential.
 QUIZ OBJECT
 ========================
 
-Generate MINIMUM 20 questions. Mix: MCQ, short answer, true/false, assertion-reason, fill in blanks, application-based.
+Generate 10 questions. Mix: MCQ, short answer, true/false.
 
 "quiz": [
   {

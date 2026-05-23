@@ -4,12 +4,19 @@ async function callOllama(
   userPrompt: string,
   onDelta: (delta: string) => void,
 ): Promise<string> {
-  const response = await fetch('http://localhost:11434/api/chat', {
+  const ollamaBase = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434'
+  const response = await fetch(`${ollamaBase}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(600_000), // 10 min — large models are slow to load
     body: JSON.stringify({
       model,
       stream: true,
+      options: {
+        num_ctx: 32768,     // safe for qwen2.5:14b — fits weights + KV cache in ~12GB
+        num_predict: 16384, // max output tokens
+        temperature: 0.4,
+      },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
