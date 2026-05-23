@@ -77,8 +77,8 @@ If you're not sure where to start, open an issue and say "I'd like to contribute
 ## Development Setup
 
 ```bash
-# 1. Fork the repo, then clone your fork
-git clone https://github.com/<your-username>/StudyForge.git
+# 1. Fork the repo and clone your fork
+git clone https://github.com/RishavRajSingh44/StudyForge.git
 cd StudyForge
 
 # 2. Install dependencies
