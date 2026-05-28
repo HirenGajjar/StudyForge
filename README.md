@@ -7,6 +7,7 @@ No account required. Works offline with a local Ollama model. Self-hostable.
 [![CI](https://github.com/RishavRajSingh44/StudyForge/actions/workflows/ci.yml/badge.svg)](https://github.com/RishavRajSingh44/StudyForge/actions/workflows/ci.yml)
 [![Security Scan](https://github.com/RishavRajSingh44/StudyForge/actions/workflows/security.yml/badge.svg)](https://github.com/RishavRajSingh44/StudyForge/actions/workflows/security.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/RishavRajSingh44/StudyForge/badge)](https://securityscorecards.dev/viewer/?uri=github.com/RishavRajSingh44/StudyForge)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13013/badge)](https://www.bestpractices.dev/projects/13013)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-orange.svg)](./LICENSE)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](./CODE_OF_CONDUCT.md)
 
